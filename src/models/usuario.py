@@ -10,3 +10,4 @@ class Usuario(BaseModel):
     ativo: bool = True
     data_criacao: str = datetime.now().strftime("%d/%m/%Y %H:%M")
     data_atualizacao: str = datetime.now().strftime("%d/%m/%Y %H:%M")
+    session_expiration: datetime = None

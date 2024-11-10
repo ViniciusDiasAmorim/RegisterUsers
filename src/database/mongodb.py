@@ -19,5 +19,6 @@ def parse_usuario(usuario):
         "senha": usuario["senha"],
         "ativo": usuario["ativo"],
         "data_criacao": usuario["data_criacao"],
-        "data_atualizacao": usuario["data_atualizacao"]
+        "data_atualizacao": usuario["data_atualizacao"],
+        "session_expiration": usuario["session_expiration"]
     }

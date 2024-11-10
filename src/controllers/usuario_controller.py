@@ -2,16 +2,24 @@ from fastapi import HTTPException
 from database.mongodb import usuarios_collection, parse_usuario
 from models.usuario import Usuario
 from bson.objectid import ObjectId
-from datetime import datetime
+from datetime import datetime, timedelta
 
+
+async def buscar_todos_usuarios():
+    usuarios = []
+    async for usuario in usuarios_collection.find():
+        usuario["id"] = str(usuario["_id"])
+        usuarios.append(usuario)
+    return usuarios
+    
 async def criar_usuario(usuario: Usuario):
-    validar_nome(usuario.nome)
+    validar_nome(usuario.nome_usuario)
     validar_email(usuario.email)
     validar_senha(usuario.senha)
-
     usuario.nome_usuario = f"{usuario.nome.lower()}.{usuario.nome.split()[-1].lower()}"
     usuario.data_criacao = usuario.data_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
-    novo_usuario = await usuarios_collection.insert_one(usuario.dict())
+    usuario.session_expiration = None
+    novo_usuario = await usuarios_collection.insert_one(usuario.dict(exclude_unset=True))
     return await obter_usuario_por_id(novo_usuario.inserted_id)
 
 async def obter_usuario_por_id(usuario_id: str):
@@ -19,8 +27,19 @@ async def obter_usuario_por_id(usuario_id: str):
     if usuario:
         return parse_usuario(usuario)
 
-async def atualizar_usuario(usuario_id: str, dados: dict):
-    dados["data_atualizacao"] = datetime.now()
+async def atualizar_usuario(usuario_id: str, usuario: Usuario):
+    validar_nome(usuario.nome_usuario)
+    validar_email(usuario.email)
+    validar_senha(usuario.senha)
+    usuario.data_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
+    usuario_dict = usuario.dict(exclude_unset=True)
+
+    await usuarios_collection.update_one({"_id": ObjectId(usuario_id)}, {"$set": usuario_dict})
+    return await obter_usuario_por_id(usuario_id)
+
+async def redefinir_senha(usuario_id: str, dados: dict):
+    validar_senha(dados["senha"])
+    dados["data_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
     await usuarios_collection.update_one({"_id": ObjectId(usuario_id)}, {"$set": dados})
     return await obter_usuario_por_id(usuario_id)
 
@@ -32,7 +51,23 @@ async def obter_usuario_por_nome_usuario(nome_usuario: str):
     usuario = await usuarios_collection.find_one({"nome_usuario": nome_usuario})
     if usuario:
         return parse_usuario(usuario)
+    
+async def login_usuario(nome_usuario: str, senha: str):
+    usuario = await usuarios_collection.find_one({"nome_usuario": nome_usuario})
+    if usuario and usuario["senha"] == senha:
+        if usuario.get("ativo") is True:
+            session_expiration = datetime.now() + timedelta(hours=2)
+            await usuarios_collection.update_one(
+                {"_id": usuario["_id"]},
+                {"$set": {"session_expiration": session_expiration}}
+            )
+            return {"msg": "Login realizado com sucesso", "session_expiration": session_expiration}
+        else:
+            raise HTTPException(status_code=403, detail="Usuario inativo.")
+    else:
+        raise HTTPException(status_code=400, detail="Nome de usuário ou senha incorretos")
 
+    
 def validar_nome(nome: str):
     nome = nome.strip()
     if not nome:
@@ -40,8 +75,8 @@ def validar_nome(nome: str):
             status_code = 400,
             detail={
                 "code": "INVALID_NOME",
-                "description": "O nome não pode estar vazio.",
-                "parameter_name": "nome"
+                "description": "O nome de usuario não pode estar vazio.",
+                "parameter_name": "nome_usuario"
             }
         )
     
@@ -50,8 +85,8 @@ def validar_nome(nome: str):
             status_code = 400,
             detail={
                 "code": "INVALID_FORMAT",
-                "description": "O nome deve estar no formato 'nome.sobrenome'.",
-                "parameter_name": "nome"
+                "description": "O nome de usuario deve estar no formato 'nome.sobrenome'.",
+                "parameter_name": "nome_usuario"
             }
         )
 
@@ -63,8 +98,8 @@ def validar_nome(nome: str):
             status_code = 400,
             detail={
                 "code": "INVALID_FORMAT",
-                "description": "O nome deve estar no formato 'nome.sobrenome'.",
-                "parameter_name": "nome"
+                "description": "O nome de usuario deve estar no formato 'nome.sobrenome'.",
+                "parameter_name": "nome_usuario"
             }
         )
 
@@ -89,3 +124,18 @@ def validar_senha(senha: str):
                 "parameter_name": "senha"
             }
         )
+
+async def verificar_sessao_valida(usuario_id: str):
+    usuario = await usuarios_collection.find_one({"_id": ObjectId(usuario_id)})
+    if usuario:
+        if usuario.get("session_expiration") and usuario["session_expiration"] < datetime.now():
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "code": "SESSION_EXPIRED",
+                    "description": "Sessao expirada. Faça login novamente."
+                }
+            )
+        return usuario
+    else:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
