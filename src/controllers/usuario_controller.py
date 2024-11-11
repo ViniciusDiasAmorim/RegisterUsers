@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from database.mongodb import usuarios_collection, parse_usuario
+from models.dto import UsuarioAtualizacaoDTO
 from models.usuario import Usuario
 from bson.objectid import ObjectId
 from datetime import datetime, timedelta
@@ -18,6 +19,7 @@ async def criar_usuario(usuario: Usuario):
     validar_senha(usuario.senha)
     usuario.nome_usuario = f"{usuario.nome.lower()}.{usuario.nome.split()[-1].lower()}"
     usuario.data_criacao = usuario.data_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
+    usuario.ativo = True
     novo_usuario = await usuarios_collection.insert_one(usuario.dict(exclude_unset=True))
     return await obter_usuario_por_id(novo_usuario.inserted_id)
 
@@ -26,13 +28,12 @@ async def obter_usuario_por_id(usuario_id: str):
     if usuario:
         return parse_usuario(usuario)
 
-async def atualizar_usuario(usuario_id: str, usuario: Usuario):
+async def atualizar_usuario(usuario_id: str, usuario: UsuarioAtualizacaoDTO):
     validar_nome(usuario.nome_usuario)
     validar_email(usuario.email)
     validar_senha(usuario.senha)
-    usuario.data_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
     usuario_dict = usuario.dict(exclude_unset=True)
-
+    usuario_dict["data_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M") 
     await usuarios_collection.update_one({"_id": ObjectId(usuario_id)}, {"$set": usuario_dict})
     return await obter_usuario_por_id(usuario_id)
 
@@ -62,9 +63,18 @@ async def login_usuario(nome_usuario: str, senha: str):
             )
             return {"msg": "Login realizado com sucesso", "session_expiration": session_expiration}
         else:
-            raise HTTPException(status_code=403, detail="Usuario inativo.")
+            raise HTTPException(status_code=403,
+            detail={
+                "code": "INACTIVE_USER",
+                "description": "O usuario esta inativo",
+                "parameter_name": "inativo"
+            })
     else:
-        raise HTTPException(status_code=400, detail="Nome de usuário ou senha incorretos")
+        raise HTTPException(status_code=400, detail={
+            "code" : "INVALID_CREDENTIALS",
+            "description": "o nome de usuario ou senha sao invalidos",
+            "parameters": "senha or nome_usuario"
+        })
 
     
 def validar_nome(nome: str):
