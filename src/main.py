@@ -21,12 +21,9 @@ async def listar_usuarios():
 async def endpoint_criar_usuario(usuario: Usuario):
     return await criar_usuario(usuario)
 
-# @app.get("/usuarios/{usuario_id}", response_model=Usuario)
-# async def endpoint_obter_usuario(usuario_id: str):
-#     usuario = await obter_usuario_por_id(usuario_id)
-#     if not usuario:
-#         raise HTTPException(status_code=404, detail="Usuário não encontrado")
-#     return usuario
+@app.post("/usuarios/login/")
+async def endpoint_login(nome_usuario: str, senha: str):
+    return await login_usuario(nome_usuario, senha)
 
 @app.put("/usuarios/{usuario_id}", response_model=Usuario)
 async def endpoint_atualizar_usuario(usuario_id: str, usuario: Usuario):
@@ -35,15 +32,6 @@ async def endpoint_atualizar_usuario(usuario_id: str, usuario: Usuario):
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     return usuario
 
-@app.delete("/usuarios/{usuario_id}")
-async def endpoint_deletar_usuario(usuario_id: str):
-    await deletar_usuario(usuario_id)
-    return {"msg": "Usuário deletado com sucesso"}
-
-@app.post("/usuarios/login/")
-async def endpoint_login(nome_usuario: str, senha: str):
-    return await login_usuario(nome_usuario, senha)
-
 @app.put("/usuarios/redefinir_senha/{usuario_id}")
 async def endpoint_redefinir_senha(usuario_id: str, nova_senha: str):
     usuario = await obter_usuario_por_id(usuario_id)
@@ -51,3 +39,8 @@ async def endpoint_redefinir_senha(usuario_id: str, nova_senha: str):
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     await redefinir_senha(usuario_id, {"senha": nova_senha})
     return {"msg": "Senha atualizada com sucesso"}
+
+@app.delete("/usuarios/{usuario_id}")
+async def endpoint_deletar_usuario(usuario_id: str):
+    await deletar_usuario(usuario_id)
+    return {"msg": "Usuário deletado com sucesso"}

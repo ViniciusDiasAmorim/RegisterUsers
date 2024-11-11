@@ -18,7 +18,6 @@ async def criar_usuario(usuario: Usuario):
     validar_senha(usuario.senha)
     usuario.nome_usuario = f"{usuario.nome.lower()}.{usuario.nome.split()[-1].lower()}"
     usuario.data_criacao = usuario.data_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M")
-    usuario.session_expiration = None
     novo_usuario = await usuarios_collection.insert_one(usuario.dict(exclude_unset=True))
     return await obter_usuario_por_id(novo_usuario.inserted_id)
 
